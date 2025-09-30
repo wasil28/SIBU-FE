@@ -17,13 +17,13 @@ useHead({
 </script>
 
 <template>
-  <Html :lang="locale">
-    <Body>
-      <NuxtLayout>
-        <div>
-          <NuxtPage :key="$route.fullPath" />
-        </div>
-      </NuxtLayout>
-    </Body>
-  </Html>
+    <Html :lang="locale">
+      <Body>
+        <NuxtLayout>
+          <div>
+            <NuxtPage :key="$route.fullPath" />
+          </div>
+        </NuxtLayout>
+      </Body>
+    </Html>  
 </template>

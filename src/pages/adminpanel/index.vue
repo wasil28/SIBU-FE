@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import Calendar from '~/components/Calendar.vue';
 
 // --- METADATA & LAYOUT SETUP ---
 // Menetapkan judul halaman dan breadcrumb untuk konsistensi di seluruh aplikasi.
@@ -84,7 +85,7 @@ onMounted(() => {
   <div class="bg-gray-50 min-h-screen flex font-sans">
 
     <!-- Main Content -->
-    <main class="flex-1 p-8">
+    <main class="flex-1 p-8 pr-1 pt-0">
       <h2 class="text-3xl font-bold text-gray-800 mb-6">Report Task</h2>
       
       <!-- Progress Cards -->
@@ -153,66 +154,17 @@ onMounted(() => {
     </main>
 
     <!-- Right Panel -->
-    <aside class="w-80 bg-white p-6 border-l border-gray-200">
-       <div class="flex justify-end mb-6">
-          <button class="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full text-gray-600">EX</button>
-      </div>
+    <aside class="w-[30%]  p-6 bg-gray-50 mt-10">
       
       <!-- Calendar -->
-      <div class="mb-8">
-        <div class="flex justify-between items-center mb-4">
-          <button class="text-gray-500">&lt;</button>
-          <h4 class="font-bold">February, 2025</h4>
-          <button class="text-gray-500">&gt;</button>
-        </div>
-        <div class="grid grid-cols-7 text-center text-sm text-gray-500">
-          <div class="py-2">S</div>
-          <div class="py-2">M</div>
-          <div class="py-2">T</div>
-          <div class="py-2">W</div>
-          <div class="py-2">T</div>
-          <div class="py-2">F</div>
-          <div class="py-2">S</div>
-        </div>
-        <div class="grid grid-cols-7 text-center text-sm">
-            <div v-for="day in 28" :key="day" class="py-2" :class="{'bg-blue-500 text-white rounded-full': day === 12, 'text-gray-300': day < 3}">
-               {{ day < 3 ? 27 + day -1 : day - 2 }}
-            </div>
-             <div class="py-2 text-gray-300">1</div>
-             <div class="py-2 text-gray-300">2</div>
-             <div class="py-2 text-gray-300">3</div>
-        </div>
-        <div class="mt-4 space-y-2 text-sm">
-            <div class="flex items-center">
-                <span class="w-3 h-3 bg-blue-500 rounded-full mr-2"></span>
-                <span>Sudah Selesai</span>
-            </div>
-            <div class="flex items-center">
-                <span class="w-3 h-3 bg-yellow-400 rounded-full mr-2"></span>
-                <span>Belum Selesai</span>
-            </div>
-            <div class="flex items-center">
-                <span class="w-3 h-3 bg-red-500 rounded-full mr-2"></span>
-                <span>Tidak Dikerjakan</span>
-            </div>
-        </div>
+      <div class="w-full max-w-md mb-6 flex justify-center bg-white  rounded-2xl p-4 shadow-md">
+        <Calendar />
       </div>
-
+      
       <!-- Leaderboard -->
-      <div>
-        <h4 class="font-bold mb-4">Leaderboard</h4>
-        <div class="space-y-3">
-            <div v-for="(user, index) in leaderboardData" :key="user.id" class="flex items-center p-2 rounded-lg" :class="{'bg-yellow-100 border border-yellow-300': index === 0}">
-                <div class="w-6 text-center font-bold">{{ index + 1 }}</div>
-                <img :src="user.avatar" class="w-10 h-10 rounded-full mx-3" :alt="user.name">
-                <div class="flex-1">
-                    <p class="font-semibold">{{ user.name }}</p>
-                    <p class="text-xs text-gray-500">{{ user.location }}</p>
-                </div>
-                <div class="font-bold text-gray-700">{{ user.score }}</div>
-            </div>
-        </div>
-      </div>
+      <div class="w-full max-w-md bg-white  rounded-2xl p-4 shadow-md">
+        <LeaderboardList />
+      </div>      
     </aside>
   </div>
 </template>

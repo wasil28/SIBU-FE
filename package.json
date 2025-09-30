@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@azure/msal-browser": "^3.10.0",
+    "@internationalized/date": "^3.9.0",
     "@mdi/js": "^7.4.47",
     "@nuxt/ui": "2.13.0",
     "@nuxtjs/dotenv": "^1.4.2",
