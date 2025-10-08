@@ -38,53 +38,94 @@ const STATUS_LABELS = {
 // ===== STATE =====
 const tasks = ref<Task[]>([])
 const dateStatuses = ref<DateStatusInfo[]>([])
+const isLoading = ref(false)
+const error = ref<string | null>(null)
 let refreshIntervalId: NodeJS.Timeout | null = null
 
 // ===== API FUNCTIONS =====
-async function fetchTasks(): Promise<Task[]> {
-  await new Promise(resolve => setTimeout(resolve, 500))
+async function fetchTask(): Promise<Task[]> {
+  try {
+    isLoading.value = true
+    error.value = null
 
-  const baseTasks: Task[] = [
-    { id: '1', date: '2025-09-04', status: 'completed', title: 'Task 1' },
-    { id: '2', date: '2025-09-04', status: 'completed', title: 'Task 2' },
+    const [jsonPlaceholderResponse, dummyJsonResponse] = await Promise.all([
+      fetch('https://jsonplaceholder.typicode.com/todos'),
+      fetch('https://dummyjson.com/todos?limit=150')
+    ])
 
-    { id: '3', date: '2025-09-05', status: 'completed', title: 'Task 3' },
-    { id: '4', date: '2025-09-05', status: 'in-progress', title: 'Task 4' },
+    if (!jsonPlaceholderResponse.ok || !dummyJsonResponse.ok) {
+      throw new Error('Failed to fetch tasks')
+    }
 
-    { id: '5', date: '2025-09-06', status: 'not-started', title: 'Task 5' },
-    { id: '6', date: '2025-09-06', status: 'not-started', title: 'Task 6' },
+    const jsonPlaceholderData = await jsonPlaceholderResponse.json()
+    const dummyJsonData = await dummyJsonResponse.json()
 
-    { id: '7', date: '2025-09-07', status: 'completed', title: 'Task 7' },
+    const today = new Date()
+    const startDate = new Date(today.getFullYear(), 0, 1)
+    const endDate = new Date(today.getFullYear(), 11, 31)
+    const totalDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
 
-    { id: '8', date: '2025-09-08', status: 'in-progress', title: 'Task 8' },
-    { id: '9', date: '2025-09-08', status: 'completed', title: 'Task 9' },
+    const jsonPlaceholderTasks: Task[] = jsonPlaceholderData.map((todo: any, index: number) => {
+      const dayOffset = Math.floor((index / jsonPlaceholderData.length) * totalDays)
+      const taskDate = new Date(startDate)
 
-    { id: '10', date: '2025-09-09', status: 'not-started', title: 'Task 10' },
-    { id: '11', date: '2025-09-09', status: 'in-progress', title: 'Task 11' },
-    
-    { id: '12', date: '2025-09-10', status: 'completed', title: 'Task 12' },
-    { id: '13', date: '2025-09-10', status: 'completed', title: 'Task 13' },
+      taskDate.setDate(startDate.getDate() + dayOffset)
 
-    { id: '14', date: '2025-09-11', status: 'in-progress', title: 'Task 14' },
-    { id: '15', date: '2025-09-11', status: 'not-started', title: 'Task 15' },
+      let status: TaskStatus
+      if (todo.completed) {
+        status = 'completed'
+      } else {
+        status = Math.random() > 0.5 ? 'in-progress' : 'not-started'
+      }
 
-    { id: '16', date: '2025-09-12', status: 'completed', title: 'Task 16' },
-    { id: '17', date: '2025-09-12', status: 'in-progress', title: 'Task 17' },
+      return {
+        id: `jp-${todo.id}`,
+        date: formatDate(taskDate),
+        status: status,
+        title: todo.title.length > 50 ? todo.title.substring(0, 50) + '...' : todo.title
+      }
+    })
 
-    { id: '18', date: '2025-09-13', status: 'not-started', title: 'Task 18' },
-    { id: '19', date: '2025-09-13', status: 'completed', title: 'Task 19' },
+    const dummyJsonTasks: Task[] = dummyJsonData.todos.map((todo: any, index: number) => {
+      // Spread tasks evenly across the year with offset
+      const dayOffset = Math.floor((index / dummyJsonData.todos.length) * totalDays)
+      const taskDate = new Date(startDate)
+      taskDate.setDate(startDate.getDate() + dayOffset)
 
-    { id: '20', date: '2025-09-14', status: 'in-progress', title: 'Task 20' },
-    { id: '21', date: '2025-09-14', status: 'not-started', title: 'Task 21' },
+      let status: TaskStatus
+      if (todo.completed) {
+        status = 'completed'
+      } else {
+        status = Math.random() > 0.5 ? 'in-progress' : 'not-started'
+      }
 
-    { id: '22', date: '2025-09-15', status: 'completed', title: 'Task 22' },
-    { id: '23', date: '2025-09-15', status: 'completed', title: 'Task 23' },
+      return {
+        id: `dj-${todo.id}`,
+        date: formatDate(taskDate),
+        status: status,
+        title: todo.todo.length > 50 ? todo.todo.substring(0, 50) + '...' : todo.todo
+      }
+    })
+    // Combine both
+    const allTasks = [...jsonPlaceholderTasks, ...dummyJsonTasks]
 
-    { id: '24', date: '2025-09-16', status: 'in-progress', title: 'Task 24' },
-    
-    { id: '25', date: '2025-09-24', status: 'completed', title: 'Task 25' }
-  ]  
-  return baseTasks
+    // Shuffle  randomly throughout the year
+    return allTasks.sort(() => Math.random() - 0.5)
+
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to load tasks'
+    console.error('Error fetching tasks:', err)
+    return []
+  } finally {
+    isLoading.value = false
+  }
+}
+
+function formatDate(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function getRandomTaskStatus(): TaskStatus {
@@ -105,8 +146,7 @@ function calculateDateStatus(dateTasks: Task[]): DateStatus {
 }
 
 function groupTasksByDate(taskList: Task[]): Map<string, Task[]> {
-
-  const dateMap = new Map<string, Task[]>();
+  const dateMap = new Map<string, Task[]>()
 
   taskList.forEach(task => {
     const existingTasks = dateMap.get(task.date) || []
@@ -164,12 +204,12 @@ async function loadTasks(): Promise<void> {
       dateStatuses.value = processTasksToDateStatuses(fetchedTasks)
     }
   } catch (error) {
-    console.error('Error fetching tasks:', error)
+    console.error('Error loading tasks:', error)
   }
 }
 
 function startAutoRefresh(): void {
-  stopAutoRefresh() 
+  stopAutoRefresh()
   refreshIntervalId = setInterval(loadTasks, REFRESH_INTERVAL)
 }
 
@@ -222,7 +262,7 @@ const calendarAttributes = computed(() => {
 
     const jsDate = new Date(
       dateStatus.date.year,
-      dateStatus.date.month - 1, 
+      dateStatus.date.month - 1,
       dateStatus.date.day
     )
 
@@ -230,15 +270,15 @@ const calendarAttributes = computed(() => {
 
     attributes.push({
       key: `status-${index}`,
-      dates: jsDate,      
-      highlight: {        
+      dates: jsDate,
+      highlight: {
         fillMode: 'light',
         style: {
-          backgroundColor: STATUS_COLORS[dateStatus.status],          
+          backgroundColor: STATUS_COLORS[dateStatus.status],
           borderRadius: '6px',
           opacity: 0.8,
           color: 'black',
-        },        
+        },
         class: 'task-status-highlight'
       },
       popover: {
@@ -246,7 +286,6 @@ const calendarAttributes = computed(() => {
         hideIndicator: true
       }
     })
-    console.log(dateStatus.status);
   })
 
   // Add today indicator
@@ -277,18 +316,36 @@ onUnmounted(() => {
 
 <template>
   <div>
-    <!-- Calendar -->
-    <div class="border-b-2 border-black mb-3">
-      <VCalendar class="pb-0 border-b-2 w-full max-w-md" :attributes="calendarAttributes" :columns="1" :rows="1"
-        expanded borderless nav-visibility="focus" :first-day-of-week="2" trim-weeks />
+    <!-- Loading State -->
+    <div v-if="isLoading && tasks.length === 0" class="text-center py-8">
+      <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      <p class="mt-2 text-sm text-gray-600">Memuat tugas...</p>
     </div>
 
-    <!-- Legend -->
-    <div class="mb-4 grid text-sm">
-      <div v-for="item in getLegendItems()" :key="item.label" class="flex items-center gap-2">
-        <div :class="['w-4', 'h-4', 'rounded', item.color]"></div>
-        <span>{{ item.label }}</span>
+    <!-- Error State -->
+    <div v-else-if="error && tasks.length === 0" class="text-center py-8">
+      <p class="text-red-600 text-sm">{{ error }}</p>
+      <button @click="loadTasks" class="mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
+        Coba Lagi
+      </button>
+    </div>
+
+    <!-- Calendar Content -->
+    <div v-else>
+      <!-- Calendar -->
+      <div class="border-b-2 border-black mb-3">
+        <VCalendar class="pb-0 border-b-2 w-full max-w-md" :attributes="calendarAttributes" :columns="1" :rows="1"
+          expanded borderless nav-visibility="focus" :first-day-of-week="2" trim-weeks />
       </div>
+
+      <!-- Legend -->
+      <div class="mb-4 grid text-sm">
+        <div v-for="item in getLegendItems()" :key="item.label" class="flex items-center gap-2">
+          <div :class="['w-4', 'h-4', 'rounded', item.color]"></div>
+          <span>{{ item.label }}</span>
+        </div>
+      </div>
+
     </div>
   </div>
 </template>
@@ -299,6 +356,7 @@ onUnmounted(() => {
 :deep(.vc-day *) {
   color: #1f2937 !important;
 }
+
 :deep(.vc-container) {
   border: none;
   width: 100%;

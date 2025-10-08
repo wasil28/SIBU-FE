@@ -57,10 +57,12 @@ watch(localeUserSetting, () => {
 
 onBeforeMount(async () => {
   if (session.value?.menuAside) {
-    isAccess.value = true
+    isAccess.value = true     
     menuAside.value = session.value.menuAside
   }
 })
+
+console.log(menuAside+`ypgcjjgkvhgjvkhbjm b,mbhilvhkhlvhmbhljbb`);
 </script>
 
 <template>

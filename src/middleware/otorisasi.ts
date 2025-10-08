@@ -68,8 +68,7 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     }
 
     try {
-      const dataMenu = await AuthApi.getMenu(roleId, paramHeader)
-
+      const dataMenu = await AuthApi.getMenu(roleId, paramHeader)      
       if (dataMenu.status === 200) {
         // Set di pinia untuk sementara
         menuStore.setMenuItems(dataMenu.data)

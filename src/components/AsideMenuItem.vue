@@ -36,7 +36,7 @@ const menuClick = (event: Event) => {
     >
       <UnoIcon class="mr-2" :class="item.icon" />
       <span
-        class="grow"
+        class="grow "
         :class="[{ 'pr-2 pl-0': !hasDropdown }]"
       >{{ item.label }}</span>
       <UnoIcon
