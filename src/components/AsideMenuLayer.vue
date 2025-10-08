@@ -50,7 +50,7 @@ const confirmLogout = () => {
     id="aside"
     class="py-2 lg:pl-2 w-60 fixed flex z-40 top-0 h-screen transition-position overflow-hidden"
   >
-    <div class="aside flex-1 flex flex-col overflow-hidden" :class="isPortal ? 'lg:rounded-none' : 'lg:rounded-2xl'">
+    <div class="aside flex-1 flex flex-col mt-10 overflow-hidden" :class="isPortal ? 'lg:rounded-none' : 'lg:rounded-2xl'">
       <div class="aside-brand flex flex-row h-16 mb-5 items-center justify-center">
         <div class="flex justify-center flex-1 lg:text-left lg:pl-6 xl:text-center xl:pl-0">
           <img class="w-24" :src="`${useNuxtApp().$config.app.baseURL}assets/images/logo-ut-white.png`" alt="Logo Universitas Terbuka">
@@ -64,7 +64,9 @@ const confirmLogout = () => {
       >
         <AsideMenuList :menu="menu" @menu-click="menuClick" />
       </div>
-
+      <div class="absolute bottom-0 left-0">
+        <img :src="`${useNuxtApp().$config.app.baseURL}assets/images/background/aside-menu-ornamen.svg`" alt="aside-menu-ornamen">
+      </div>
       <!-- <ul>
         <AsideMenuItem v-if="isPortal" :item="logoutItem" :is-portal="isPortal" @menu-click="confirmLogout" />
       </ul> -->
