@@ -24,16 +24,16 @@ const props = defineProps({
 })  
 
 const getRankingClass = (rank) => {
-  const baseClass = 'flex items-center gap-4 p-4 rounded-lg transition-colors hover:bg-gray-50'
+  const baseClass = 'flex items-center gap-4 p-4 rounded-lg transition-colors hover:bg-gray-100'
 
   const rankClasses = {
-    1: 'bg-gradient-to-r from-yellow-50 to-yellow-100 border border-yellow-200',
-    2: 'bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200',
-    3: 'bg-gradient-to-r from-orange-50 to-orange-100 border border-orange-200'
+    1: 'bg-gradient-to-r from-yellow-200 to-yellow-100 border border-yellow-200',
+    2: 'bg-gradient-to-r from-gray-200 to-gray-100 border border-gray-200',
+    3: 'bg-gradient-to-r from-orange-200 to-orange-100 border border-orange-200'
   }
 
   if (props.isCurrent) {
-    return `${baseClass} bg-gradient-to-r from-blue-50 to-blue-200 border border-blue-300 cursor-pointer` 
+    return `${baseClass} bg-gradient-to-r from-blue-200 to-blue-200 border border-blue-300 cursor-pointer` 
   }
 
   return `${baseClass} ${rankClasses[rank] || 'bg-white border border-gray-100'}`
@@ -62,7 +62,7 @@ const getTrophyImage = (rank) => {
 </script>
 
 <template>    
-  <div :class="getRankingClass(rank)" class="h-14 shadow-md">
+  <div :class="getRankingClass(rank)" class="h-14 shadow">
     <!-- default -->
     <div v-if="rank > 3" class="flex-shrink-0 w-8 h-8 flex items-center justify-center text-gray-600 font-medium">
       {{ rank }}
@@ -79,7 +79,7 @@ const getTrophyImage = (rank) => {
       <h3 class="font-semibold text-gray-900 truncate text-xs">
         {{ item.name }}
       </h3>
-      <p class="text-sm text-gray-600 truncate text-xs">
+      <p class=" text-gray-600 truncate text-xs">
         {{ item.subtitle }}
       </p>
     </div>

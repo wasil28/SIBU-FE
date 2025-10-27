@@ -59,7 +59,7 @@ async function fetchAndUpdateMenu(roleId) {
     const dataMenu = await AuthApi.getMenu(roleId, paramHeader)
 
     if (dataMenu.status === 200) {
-      // Set di pinia untuk sementara
+      // Set di WEBSOCKET_URL untuk sementara
       menuStore.setMenuItems(dataMenu.data)
 
       // get aside menu

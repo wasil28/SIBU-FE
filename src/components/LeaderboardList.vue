@@ -1,13 +1,22 @@
 <script lang="ts" setup>
+import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch } from 'vue';
 import RankCard from './CardRanking.vue';
-import { ref, onMounted, onBeforeUnmount, computed, nextTick } from 'vue';
+import { useSocket } from '~/composables/useWebsocket';
 
+/* ---------- types ---------- */
 interface LeaderBoardItem {
   id?: string | number;
   name: string;
   subtitle: string;
   score: number;
 }
+
+const BACKEND_HTTP_BASE_URL = 'http://localhost:3007';
+const WEBSOCKET_URL = 'http://localhost:3007';
+const API_BASE_PATH = '/api/v1/auth-sso';
+
+const { socket, isConnected, on, off, emit, connect, disconnect } = useSocket(WEBSOCKET_URL);
+
 
 const LeaderboardData = ref<LeaderBoardItem[]>([
   { name: 'UT Aceh', subtitle: 'UPBJJ Banda Aceh', score: 2909 },
@@ -50,171 +59,181 @@ const LeaderboardData = ref<LeaderBoardItem[]>([
   { name: 'UT Sorong', subtitle: 'UPBJJ Sorong', score: 1850 }
 ]);
 
-const { session } = await useSession()
+const { session } = await useSession();
 
 const sortedLeaderboardData = computed<LeaderBoardItem[]>(() => {
   return [...LeaderboardData.value].sort((a, b) => b.score - a.score);
 });
 
 const visibleItems = ref<Set<number>>(new Set());
-const scrollDirection = ref<"up" | "down">("down");
+const scrollDirection = ref<'up' | 'down'>('down');
 
-//check current user
-const userCurrentposition = ref<number | null>(null);
-const upbjjUser = session?.value?.activeRole?.upbjj;
+const upbjjUser = computed(() => session?.value?.activeRole?.upbjj);
 
+const userCurrentposition = computed<number | null>(() => {
+  if (!upbjjUser.value) return null;
+  const idx = sortedLeaderboardData.value.findIndex(item =>
+    item.name.toLowerCase().includes(upbjjUser.value.toLowerCase())
+  );
+  return idx !== -1 ? idx : null;
+});
 
-if (upbjjUser) {
-  const index = sortedLeaderboardData.value.findIndex(item =>
-    item.name.toLowerCase().includes(upbjjUser.toLowerCase())
-  );  
-  if (index !== -1) {
-    userCurrentposition.value = index;
-  }
-}
-
-// Configuration for sticky card
 const showFloating = ref<boolean>(true);
-const stickyIndex = computed(()=>{
-  console.log(userCurrentposition.value);
-  return userCurrentposition.value !== null
-    ? userCurrentposition.value
-    : 37    
-})
+const stickyIndex = computed(() => {
+  return userCurrentposition.value !== null ? userCurrentposition.value : 0;
+});
 
 let rootScrollEl: HTMLElement | null = null;
 let observerAll: IntersectionObserver | null = null;
 let observerSpecial: IntersectionObserver | null = null;
-let onScrollHandler: ((e: Event) => void) | null = null;
+let onScrollHandler: ((e?: Event) => void) | null = null;
 
 const scrollToCard = () => {
   if (!rootScrollEl) return;
-  const targetCard = document.querySelector(`.rank-card[data-index="${stickyIndex.value}"]`) as HTMLElement | null;
+  const targetCard = rootScrollEl.querySelector(`.rank-card[data-index="${stickyIndex.value}"]`) as HTMLElement | null;
   if (targetCard) {
     const cardTop = targetCard.offsetTop;
     const offset = 1;
-    rootScrollEl.scrollTo({ 
-      top: cardTop - offset, 
-      behavior: 'smooth' 
-    });
+    rootScrollEl.scrollTo({ top: cardTop - offset, behavior: 'smooth' });
   }
 };
 
-onMounted(async () => {
+/* ---------- observer setup ---------- */
+const setupObservers = async () => {
   await nextTick();
+  if (!rootScrollEl) return;
 
-  rootScrollEl = document.querySelector("#leaderboard-scroll") as HTMLElement | null;
-  let lastScrollTop = 0;
+  // disconnect previous observers
+  observerAll?.disconnect();
+  observerSpecial?.disconnect();
+  observerAll = null;
+  observerSpecial = null;
 
-  // Track scroll direction
-  onScrollHandler = () => {
-    if (!rootScrollEl) return;
-    const st = rootScrollEl.scrollTop;
-    scrollDirection.value = st > lastScrollTop ? "down" : "up";
-    lastScrollTop = st <= 0 ? 0 : st;
-  };
-  rootScrollEl?.addEventListener("scroll", onScrollHandler);
-
-  // Observer for fade-in/fade-out animations
+  // Observer for fade-in / fade-out
   observerAll = new IntersectionObserver(
     (entries) => {
-      entries.forEach((entry) => {
-        const idxStr = entry.target.getAttribute("data-index");
-        if (idxStr == null) return;
+      for (const entry of entries) {
+        const idxStr = (entry.target as Element).getAttribute('data-index');
+        if (idxStr == null) continue;
         const index = Number(idxStr);
-
-        if (entry.isIntersecting) {
-          visibleItems.value.add(index);
-        } else {
-          visibleItems.value.delete(index);
-        }
-      });
+        if (entry.isIntersecting) visibleItems.value.add(index);
+        else visibleItems.value.delete(index);
+      }
     },
-    {
-      threshold: 0.1,
-      root: rootScrollEl,
-    }
+    { threshold: 0.1, root: rootScrollEl }
   );
 
-  document.querySelectorAll(".rank-card").forEach((el) => {
-    observerAll?.observe(el);
-  });
+  // Observe only children inside the scroll root
+  const cards = rootScrollEl.querySelectorAll('.rank-card');
+  cards.forEach((el) => observerAll?.observe(el));
 
   // Special observer for the sticky card
-  if (rootScrollEl && sortedLeaderboardData.value.length > stickyIndex.value) {
-    const specialEl = document.querySelector(`.rank-card[data-index="${stickyIndex.value}"]`) as HTMLElement | null;
-
+  if (sortedLeaderboardData.value.length > 0 && stickyIndex.value >= 0 && stickyIndex.value < sortedLeaderboardData.value.length) {
+    const specialEl = rootScrollEl.querySelector(`.rank-card[data-index="${stickyIndex.value}"]`) as HTMLElement | null;
     if (specialEl) {
       observerSpecial = new IntersectionObserver(
         (entries) => {
-          entries.forEach((entry) => {
-            // Hide floating card when the actual card is visible            
-            if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
-              showFloating.value = false;
-            } else {
-              showFloating.value = true;
-            }
-          });
+          for (const entry of entries) {
+            // hide floating when actual is mostly visible
+            showFloating.value = !(entry.isIntersecting && entry.intersectionRatio >= 0.5);
+          }
         },
-        {
-          root: rootScrollEl,
-          threshold: [0, 0.25, 0.5, 0.75, 1.0],
-        }
+        { root: rootScrollEl, threshold: [0, 0.25, 0.5, 0.75, 1.0] }
       );
-
       observerSpecial.observe(specialEl);
     }
   }
+};
+
+/* ---------- socket event handler (store for off) ---------- */
+const handleUpdateLeaderboard = (data: unknown) => {
+  try {
+    if (Array.isArray(data)) {
+      LeaderboardData.value = data as LeaderBoardItem[];
+    } else {
+      console.error('Invalid leaderboard data received:', data);
+    }
+  } catch (err) {
+    console.error('Error updating leaderboard:', err);
+  }
+};
+
+/* ---------- lifecycle ---------- */
+onMounted(async () => {
+  // register socket listener with a named handler so we can remove it later
+  on('updateLeaderboard', handleUpdateLeaderboard);
+
+  // attempt to request data (ensure socket implementation handles emit before connected)
+  try {
+    emit('getLeaderboard');
+  } catch (err) {
+    console.error('Error emitting getLeaderboard:', err);
+  }
+
+  await nextTick();
+  rootScrollEl = document.querySelector('#leaderboard-scroll') as HTMLElement | null;
+  if (!rootScrollEl) {
+    console.error('Leaderboard scroll container not found');
+    return;
+  }
+
+  // scroll direction tracker
+  let lastScrollTop = 0;
+  onScrollHandler = () => {
+    if (!rootScrollEl) return;
+    const st = rootScrollEl.scrollTop;
+    scrollDirection.value = st > lastScrollTop ? 'down' : 'up';
+    lastScrollTop = st <= 0 ? 0 : st;
+  };
+  rootScrollEl.addEventListener('scroll', onScrollHandler, { passive: true });
+
+  // initial observers
+  await setupObservers();
 });
 
+/* re-setup observers when leaderboard changes or sticky index changes */
+watch(sortedLeaderboardData, async () => { await setupObservers(); }, { deep: false });
+watch(stickyIndex, async () => { await setupObservers(); });
+
 onBeforeUnmount(() => {
-  if (rootScrollEl && onScrollHandler) {
-    rootScrollEl.removeEventListener("scroll", onScrollHandler);
-  }
+  if (rootScrollEl && onScrollHandler) rootScrollEl.removeEventListener('scroll', onScrollHandler);
   observerAll?.disconnect();
   observerSpecial?.disconnect();
+
+  // remove the specific handler
+  off('updateLeaderboard', handleUpdateLeaderboard);
+  // optionally close socket connection if appropriate for your app
+  try { disconnect(); } catch { /* ignore */ }
 });
 </script>
 
+
 <template>
   <div>
-    <h4 class="font-medium mb-4 text-2xl text-center">Leaderboard</h4>
-
-    <div id="leaderboard-scroll" class="relative space-y-3 max-h-[480px] overflow-y-auto no-scrollbar">      
-      <div
-        v-for="(item, index) in sortedLeaderboardData.slice(0, LeaderboardData.length)"
-        :key="index"
-        :data-index="index"
-        class="rank-card transition-all duration-700 ease-out transform"
-        :class="visibleItems.has(index)
+    <h4 class="font-medium text-2xl text-center">Leaderboard</h4>
+    <div id="leaderboard-scroll" class=" relative space-y-2 h-[45vh] overflow-y-auto no-scrollbar">
+      <div v-for="(item, index) in sortedLeaderboardData.slice(0, LeaderboardData.length)" :key="index"
+        :data-index="index" class="rank-card transition-all duration-700 ease-out transform" :class="visibleItems.has(index)
           ? 'opacity-100 translate-y-0'
           : scrollDirection === 'down'
             ? 'opacity-0 translate-y-6'
             : 'opacity-0 -translate-y-6'
-        "
-      >
+          ">
         <RankCard :item="item" :rank="index + 1" :isCurrent="index === userCurrentposition" />
       </div>
-
       <!-- Floating card  -->
-      <Transition
-        enter-active-class="transition-all duration-300"
-        leave-active-class="transition-all duration-300"
-        enter-from-class="opacity-0 translate-y-4"
-        enter-to-class="opacity-100 translate-y-0"
-        leave-from-class="opacity-100 translate-y-0"
-        leave-to-class="opacity-0 translate-y-4"
-      >
-        <div
-          v-if="showFloating && sortedLeaderboardData.length > stickyIndex"
-          class="sticky bottom-0 left-0 right-0 z-20 pointer-events-none"
-        >
+      <Transition enter-active-class="transition-all duration-300" leave-active-class="transition-all duration-300"
+        enter-from-class="opacity-0 translate-y-4" enter-to-class="opacity-100 translate-y-0"
+        leave-from-class="opacity-100 translate-y-0" leave-to-class="opacity-0 translate-y-4">
+        <div v-if="showFloating && sortedLeaderboardData.length > stickyIndex"
+          class="sticky bottom-0 left-0 right-0 z-20 pointer-events-none">
           <div class="mb-2 bg-blue-700 rounded-lg shadow-lg border-2 border-blue-900 pointer-events-auto">
-            <RankCard :item="sortedLeaderboardData[stickyIndex]" :rank="stickyIndex + 1" :isCurrent="true" @click="scrollToCard"/>
+            <RankCard :item="sortedLeaderboardData[stickyIndex]" :rank="stickyIndex + 1" :isCurrent="true"
+              @click="scrollToCard" />
           </div>
         </div>
       </Transition>
-    </div>    
+    </div>
   </div>
 </template>
 
@@ -222,6 +241,7 @@ onBeforeUnmount(() => {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;

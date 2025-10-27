@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { CalendarDate } from '@internationalized/date'
-import { ref, onMounted, onUnmounted, computed } from 'vue'
-
+import { ref, computed, watch } from 'vue'
+import { useSocket } from '~/composables/useWebsocket';
 // ===== TYPES =====
 interface Task {
   id: string
@@ -20,7 +20,6 @@ interface DateStatusInfo {
 }
 
 // ===== CONSTANTS =====
-const REFRESH_INTERVAL = 30000 // 30 seconds
 const STATUS_COLORS = {
   'all-done': 'oklch(88.2% 0.059 254.128)',    // blue-500
   'partial': 'oklch(94.5% 0.129 101.54)',     // yellow-500
@@ -38,16 +37,11 @@ const STATUS_LABELS = {
 // ===== STATE =====
 const tasks = ref<Task[]>([])
 const dateStatuses = ref<DateStatusInfo[]>([])
-const isLoading = ref(false)
-const error = ref<string | null>(null)
-let refreshIntervalId: NodeJS.Timeout | null = null
+const refreshTrigger = ref(0)
 
 // ===== API FUNCTIONS =====
 async function fetchTask(): Promise<Task[]> {
   try {
-    isLoading.value = true
-    error.value = null
-
     const [jsonPlaceholderResponse, dummyJsonResponse] = await Promise.all([
       fetch('https://jsonplaceholder.typicode.com/todos'),
       fetch('https://dummyjson.com/todos?limit=150')
@@ -87,7 +81,6 @@ async function fetchTask(): Promise<Task[]> {
     })
 
     const dummyJsonTasks: Task[] = dummyJsonData.todos.map((todo: any, index: number) => {
-      // Spread tasks evenly across the year with offset
       const dayOffset = Math.floor((index / dummyJsonData.todos.length) * totalDays)
       const taskDate = new Date(startDate)
       taskDate.setDate(startDate.getDate() + dayOffset)
@@ -106,18 +99,13 @@ async function fetchTask(): Promise<Task[]> {
         title: todo.todo.length > 50 ? todo.todo.substring(0, 50) + '...' : todo.todo
       }
     })
-    // Combine both
-    const allTasks = [...jsonPlaceholderTasks, ...dummyJsonTasks]
 
-    // Shuffle  randomly throughout the year
+    const allTasks = [...jsonPlaceholderTasks, ...dummyJsonTasks]
     return allTasks.sort(() => Math.random() - 0.5)
 
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load tasks'
     console.error('Error fetching tasks:', err)
-    return []
-  } finally {
-    isLoading.value = false
+    throw err
   }
 }
 
@@ -126,11 +114,6 @@ function formatDate(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
-}
-
-function getRandomTaskStatus(): TaskStatus {
-  const statuses: TaskStatus[] = ['completed', 'in-progress', 'not-started']
-  return statuses[Math.floor(Math.random() * statuses.length)]
 }
 
 // ===== BUSINESS LOGIC =====
@@ -170,55 +153,87 @@ function createDateStatusInfo(tasks: Task[], dateStr: string): DateStatusInfo {
 function processTasksToDateStatuses(taskList: Task[]): DateStatusInfo[] {
   const tasksByDate = groupTasksByDate(taskList)
   const statuses: DateStatusInfo[] = []
-
   tasksByDate.forEach((tasks, dateStr) => {
     statuses.push(createDateStatusInfo(tasks, dateStr))
   })
-
   return statuses
 }
 
-function hasTasksChanged(newTasks: Task[], oldTasks: Task[]): boolean {
-  if (newTasks.length !== oldTasks.length) return true
-
-  return newTasks.some((newTask, index) => {
-    const oldTask = oldTasks[index]
-    return !oldTask || !isTaskEqual(newTask, oldTask)
-  })
-}
-
-function isTaskEqual(task1: Task, task2: Task): boolean {
-  return task1.id === task2.id &&
-    task1.status === task2.status &&
-    task1.date === task2.date &&
-    task1.title === task2.title
-}
-
 // ===== DATA MANAGEMENT =====
+
+// URL dasar Backend API (Sesuaikan dengan APP_PORT di .env Backend Anda)
+const BACKEND_HTTP_BASE_URL = 'http://localhost:3007';
+// URL WebSocket (Sesuaikan dengan WS_PORT di .env Backend Anda)
+const WEBSOCKET_URL = 'http://localhost:3007';
+// Base path API (Sesuaikan dengan yang di AppController NestJS)
+const API_BASE_PATH = '/api/v1/auth-sso';
+const {
+  socket,
+  isConnected,
+  on,
+  off,
+  emit,
+  connect,
+  disconnect, } = useSocket(WEBSOCKET_URL);
+
 async function loadTasks(): Promise<void> {
   try {
-    const fetchedTasks = await fetchTasks()
-
-    if (hasTasksChanged(fetchedTasks, tasks.value)) {
-      tasks.value = fetchedTasks
-      dateStatuses.value = processTasksToDateStatuses(fetchedTasks)
-    }
+    const fetchedTasks = await fetchTask()
+    tasks.value = fetchedTasks
+    dateStatuses.value = processTasksToDateStatuses(fetchedTasks)
   } catch (error) {
     console.error('Error loading tasks:', error)
+    throw error
   }
 }
 
-function startAutoRefresh(): void {
-  stopAutoRefresh()
-  refreshIntervalId = setInterval(loadTasks, REFRESH_INTERVAL)
+function updateTaskInList(updatedTask: Task) {
+  const index = tasks.value.findIndex(t => t.id === updatedTask.id)
+  if (index !== -1) {
+    tasks.value[index] = updatedTask
+  } else {
+    tasks.value.push(updatedTask)
+  }
+  // Perbarui status per tanggal
+  dateStatuses.value = processTasksToDateStatuses(tasks.value)
 }
 
-function stopAutoRefresh(): void {
-  if (refreshIntervalId) {
-    clearInterval(refreshIntervalId)
-    refreshIntervalId = null
+const { pending, error, refresh } = await useLazyAsyncData(
+  'tasks',
+  async () => {
+    await loadTasks()
+    return { tasks: tasks.value, dateStatuses: dateStatuses.value }
+  },
+  {
+    default: () => ({ tasks: [], dateStatuses: [] }),
+    watch: [refreshTrigger]
   }
-}
+)
+
+onMounted(() => {
+  // Dengarkan event task baru / update
+  on('taskUpdated', (updatedTask: Task) => {    
+    updateTaskInList(updatedTask)
+  })
+
+  // Dengarkan event kalau ada task baru
+  on('taskCreated', (newTask: Task) => {    
+    tasks.value.push(newTask)
+    dateStatuses.value = processTasksToDateStatuses(tasks.value)
+  })
+
+  // Dengarkan event delete
+  on('taskDeleted', (taskId: string) => {
+    tasks.value = tasks.value.filter(task => task.id !== taskId)
+    dateStatuses.value = processTasksToDateStatuses(tasks.value)
+  })
+})
+
+onUnmounted(() => {
+  off('taskUpdated')
+  off('taskCreated')
+  off('taskDeleted')
+})
 
 // ===== VIEW HELPERS =====
 function findDateStatus(dateStr: string): DateStatusInfo | null {
@@ -238,11 +253,6 @@ function createTooltipText(dateStr: string): string {
   const totalCount = dateStatus.tasks.length
 
   return `${completedCount}/${totalCount} backup selesai`
-}
-
-function isToday(date: Date): boolean {
-  const today = new Date()
-  return date.toDateString() === today.toDateString()
 }
 
 function getLegendItems() {
@@ -301,52 +311,42 @@ const calendarAttributes = computed(() => {
 
   return attributes
 })
-
-// ===== LIFECYCLE =====
-onMounted(async () => {
-  await loadTasks()
-  startAutoRefresh()
-})
-
-onUnmounted(() => {
-  stopAutoRefresh()
-})
-
 </script>
 
 <template>
-  <div>
+  <div class="flex-1 px-2">
     <!-- Loading State -->
-    <div v-if="isLoading && tasks.length === 0" class="text-center py-8">
+
+
+    <!-- <div v-if="pending" class="text-center py-8">
       <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
       <p class="mt-2 text-sm text-gray-600">Memuat tugas...</p>
-    </div>
+    </div> -->
 
     <!-- Error State -->
-    <div v-else-if="error && tasks.length === 0" class="text-center py-8">
-      <p class="text-red-600 text-sm">{{ error }}</p>
-      <button @click="loadTasks" class="mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
+    <!-- <div v-else-if="error" class="text-center py-8">
+      <p class="text-red-600 text-sm">{{ error.message || 'Terjadi kesalahan' }}</p>
+      <button @click="refresh()" class="mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
         Coba Lagi
       </button>
-    </div>
+    </div> -->
 
     <!-- Calendar Content -->
-    <div v-else>
-      <!-- Calendar -->
-      <div class="border-b-2 border-black mb-3">
-        <VCalendar class="pb-0 border-b-2 w-full max-w-md" :attributes="calendarAttributes" :columns="1" :rows="1"
-          expanded borderless nav-visibility="focus" :first-day-of-week="2" trim-weeks />
-      </div>
-
-      <!-- Legend -->
-      <div class="mb-4 grid text-sm">
-        <div v-for="item in getLegendItems()" :key="item.label" class="flex items-center gap-2">
-          <div :class="['w-4', 'h-4', 'rounded', item.color]"></div>
-          <span>{{ item.label }}</span>
-        </div>
-      </div>
-
+    <!-- <div v-else> -->
+    <!-- Calendar -->
+    <div class="border-b-2 border-black mb-1">
+      <VCalendar class="pb-0 border-b-2 w-full max-w-md" :attributes="calendarAttributes" :columns="1" :rows="1"
+        expanded borderless nav-visibility="focus" :first-day-of-week="2" trim-weeks />
     </div>
+
+    <!-- Legend -->
+    <div class="mt-2 grid text-sm">
+      <div v-for="item in getLegendItems()" :key="item.label" class="flex items-center gap-2">
+        <div :class="['w-4', 'h-4', 'rounded', item.color]"></div>
+        <span>{{ item.label }}</span>
+      </div>
+    </div>
+    <!-- </div> -->
   </div>
 </template>
 
@@ -362,10 +362,6 @@ onUnmounted(() => {
   width: 100%;
 }
 
-:deep(.vc-header) {
-  padding: 10px;
-}
-
 :deep(.vc-title) {
   font-size: 1rem;
   font-weight: 600;
@@ -377,7 +373,6 @@ onUnmounted(() => {
   font-size: 0.875rem;
   font-weight: 500;
   padding: 5px;
-  margin-top: 10px;
 }
 
 :deep(.vc-day) {
@@ -397,20 +392,16 @@ onUnmounted(() => {
   transition: all 0.2s;
 }
 
-/* Style for dates from other months (outside current month) */
 :deep(.vc-day.is-not-in-month .vc-day-content) {
   color: #9ca3af !important;
-  /* gray-400 */
   opacity: 0.5;
 }
 
-/* Ensure other month dates don't get hover effects */
 :deep(.vc-day.is-not-in-month:hover .vc-day-content) {
   background-color: transparent !important;
   color: #9ca3af !important;
 }
 
-/* Regular hover effect for current month dates */
 :deep(.vc-day:not(.is-not-in-month):hover .vc-day-content) {
   background-color: #dbeafe !important;
 }

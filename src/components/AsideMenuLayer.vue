@@ -60,7 +60,7 @@ const confirmLogout = () => {
         </button>
       </div>
       <div
-        class="flex-1 overflow-y-auto overflow-x-hidden aside-scrollbars dark:aside-scrollbars-[slate]"
+        class="flex-1 overflow-y-auto overflow-x-hidden aside-scrollbars"
       >
         <AsideMenuList :menu="menu" @menu-click="menuClick" />
       </div>
