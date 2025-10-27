@@ -226,17 +226,3 @@ function getTaskStatus(task: any, dateKey: string) {
     </div>
   </div>
 </template>
-
-        <!-- <tbody>
-          <tr v-for="task in tasks" :key="task.name" class="hover:bg-gray-50">
-            <td class="border px-3 py-2">{{ task.name }}</td>
-            <td v-for="d in daysWithKey" :key="d.key" class="border px-2 py-1 text-center ">
-              <div class="flex justify-center">
-                <div v-if="task.status[d.key]" class="w-7 h-7 flex items-center justify-center rounded-full shadow"
-                  :class="getStatusConfig(task.status[d.key]).classes">
-                  <Icon :icon="getStatusConfig(task.status[d.key]).icon" class="w-4 h-4" />
-                </div>
-              </div>
-            </td>
-          </tr>
-        </tbody> -->

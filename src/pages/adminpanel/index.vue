@@ -157,7 +157,7 @@ onMounted(() => {
     <aside class="w-[30%] p-6 pt-0 bg-gray-50">
 
       <!-- Calendar -->
-      <div class="w-full max-w-md mb-6 flex justify-center bg-white rounded-2xl p-4 shadow-md">
+      <div class="w-full max-w-md mb-6 flex justify-center bg-white rounded-2xl p-4 pt-0 shadow-md">
         <Calendar />
       </div>
 

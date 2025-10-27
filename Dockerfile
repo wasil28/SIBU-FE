@@ -12,10 +12,10 @@ ARG ARG_DIR_SECRET
 
 # #---------------------------------------
 RUN apk update && apk add --no-cache git
-RUN git clone "`echo ${ARG_BASE_SCERET_FRONTEND}`"
+# RUN git clone "`echo ${ARG_BASE_SCERET_FRONTEND}`"
 
-RUN mv "`echo ${ARG_DIR_SECRET}`" ./
-RUN rm -rf env-ut/
+# RUN mv "`echo ${ARG_DIR_SECRET}`" ./
+# RUN rm -rf env-ut/
 # #---------------------------------------
 
 #COPY . .

@@ -15,6 +15,7 @@ const props = withDefaults(defineProps<{
   currentPage?: number; // Halaman saat ini
   footer?: boolean;
   remoteSearch?: boolean;
+  search?: boolean;
   fitLayout?: string;
   height?: string;
 }>(), {
@@ -26,6 +27,7 @@ const props = withDefaults(defineProps<{
   currentPage: 1,
   footer: false,
   remoteSearch: false,
+  search: true,
   fitLayout: "fitDataStretch", // Nilai default
   height: '550px',
 });
@@ -64,6 +66,7 @@ onMounted(() => {
     columns: props.columns || [], // Mendefinisikan kolom tabel dari props dan mengaktifkan sorting
     layout: props.fitLayout,
     height: props.height,
+    virtualDomHoz: true,    
     placeholder: 'Data tidak ditemukan',
     loading: true,
   })
@@ -110,7 +113,6 @@ onMounted(() => {
     const field = cell.getField(); // Mendapatkan nama field
     emit('cellClick', field, rowData); // Emit event dengan field dan rowData
   });
-
 });
 
 // Memperbarui tabel ketika data baru diterima
@@ -118,7 +120,7 @@ watch(data, () => {
   isLoading.value = true
   if (tabulator.value && displayedData.value.length > 0) {
     tabulator.value?.setData(displayedData.value); // Set data baru
-    tabulator.value.redraw();
+    // tabulator.value.redraw();
   }
   isLoading.value = false
 });
@@ -127,7 +129,7 @@ watch(data, () => {
 watch(() => props.currentPage, () => {
   isLoading.value = true
   tabulator.value?.setData(displayedData.value);
-  tabulator.value?.redraw();
+  // tabulator.value?.redraw();
   isLoading.value = false
 });
 
@@ -136,7 +138,7 @@ watch(() => props.columns, (newColumns) => {
   isLoading.value = true
   if (tabulator.value) {
     tabulator.value.setColumns(newColumns); // Memperbarui kolom Tabulator
-    tabulator.value.redraw();
+    // tabulator.value.redraw();
   }
   isLoading.value = false
 });
@@ -163,7 +165,7 @@ watch(searchQuery, (newQuery) => {
         return searchInObject(item, searchQuery.value);
       })
     );
-    tabulator.value?.redraw();
+    // tabulator.value?.redraw();
   }
   isLoading.value = false;
 });
@@ -202,7 +204,7 @@ defineExpose({
 
 <template>
   <div class="w-full relative">
-    <div class="flex items-center justify-between gap-3 px-4 py-3">
+    <div v-if="search" class="flex items-center justify-between gap-3 px-4 py-3">
       <div class="flex space-x-2">
       </div>
       <UInput v-model="searchQuery" icon="i-heroicons-magnifying-glass-20-solid" :placeholder="`Cari ...`"
@@ -257,29 +259,43 @@ defineExpose({
 }
 
 .tabulator .tabulator-header {
-  background-color: #2196f3;
-  color: white;
-  font-weight: bold;
+  background-color: #f5f5f5 ;
+  color: #333;
+  font-weight: bold;  
+  /* padding: 10px; */
+}
+
+.tabulator-col-content {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.tabulator {
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border: 1px solid #ddd;
 }
 
 .tabulator .tabulator-cell {
   padding: 5px;
+  text-align: center;
+  border-right: none !important;
 }
 
-.tabulator-row-odd {
-  background-color: #f9f9f9;
+.tabulator-row{
+  background-color: white;
+  border: none;
+  border-bottom: 1px solid #ddd;
 }
 
 .tabulator-row-even {
-  background-color: white;
-}
-
-.tabulator-row:hover {
- /* background-color: #e3f2fd; */
+  background-color: white !important;
 }
 
 .tabulator-header .tabulator-col {
-  background-color: #2196F3 !important;
+  background-color: white !important;
+  border-right: none !important;
 }
 
 .custom-tooltip {
